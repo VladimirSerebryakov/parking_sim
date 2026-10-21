@@ -102,13 +102,15 @@ void record_event(Dispatcher *d, const char *format, ...) {
 
 // Отрисовка
 void draw_dashboard(const Dispatcher *d) {
-    char screen[2048] = {0};
+    size_t screen_size = 1024 + d->total_spots * 128 + d->queue.capacity * 16 + HISTORY_SIZE * 160;
+    char *screen = (char *)malloc(screen_size);
+    if (screen == NULL) return;
     int offset = 0;
 
     // Очищаем экран полностью и ставим курсор в левый верхний угол
-    offset += snprintf(screen + offset, sizeof(screen) - offset, "\033[2J\033[H");
+    offset += snprintf(screen + offset, screen_size - offset, "\033[2J\033[H");
 
-    offset += snprintf(screen + offset, sizeof(screen) - offset,
+    offset += snprintf(screen + offset, screen_size - offset,
         "=====================================================\n"
         " \033[1;36m🕒 АВТОМАТИЗИРОВАННАЯ ПАРКОВКА | ТАКТ: %2d\033[0m\n"
         "=====================================================\n"
@@ -120,40 +122,41 @@ void draw_dashboard(const Dispatcher *d) {
     const char *type_tags[] = {"ОБЫЧ", "КРУП", "СПЕЦ"};
     for (int i = 0; i < d->total_spots; i++) {
         if (d->spots[i].is_occupied) {
-            offset += snprintf(screen + offset, sizeof(screen) - offset,
+            offset += snprintf(screen + offset, screen_size - offset,
                 " [%s %d] \033[31m[  ЗАНЯТО  ]\033[0m Авто #%02d (Осталось: %2d т.)\n",
                 type_tags[d->spots[i].type], d->spots[i].id,
                 d->spots[i].current_car.id, d->spots[i].current_car.parking_time_left);
         } else {
-            offset += snprintf(screen + offset, sizeof(screen) - offset,
+            offset += snprintf(screen + offset, screen_size - offset,
                 " [%s %d] \033[32m[ СВОБОДНО ]\033[0m\n",
                 type_tags[d->spots[i].type], d->spots[i].id);
         }
     }
 
-    offset += snprintf(screen + offset, sizeof(screen) - offset,
+    offset += snprintf(screen + offset, screen_size - offset,
         "\n \033[1;35m🚗 ОЧЕРЕДЬ (%d/%d):\033[0m ", d->queue.size, d->queue.capacity);
     for (int i = 0; i < d->queue.capacity; i++) {
         if (i < d->queue.size) {
             int idx = (d->queue.head + i) % d->queue.capacity;
-            offset += snprintf(screen + offset, sizeof(screen) - offset, "[ #%02d ] ", d->queue.buffer[idx].id);
+            offset += snprintf(screen + offset, screen_size - offset, "[ #%02d ] ", d->queue.buffer[idx].id);
         } else {
-            offset += snprintf(screen + offset, sizeof(screen) - offset, "[    ] ");
+            offset += snprintf(screen + offset, screen_size - offset, "[    ] ");
         }
     }
 
-    offset += snprintf(screen + offset, sizeof(screen) - offset,
+    offset += snprintf(screen + offset, screen_size - offset,
         "\n\n=====================================================\n"
         " \033[1;37m📝 ПОСЛЕДНИЕ СОБЫТИЯ:\033[0m\n");
     for (int i = 0; i < HISTORY_SIZE; i++) {
         if (strlen(d->event_history[i]) > 0) {
-            if (i == 0) offset += snprintf(screen + offset, sizeof(screen) - offset, "\033[1m-> %s\033[0m\n", d->event_history[i]);
-            else offset += snprintf(screen + offset, sizeof(screen) - offset, "   %s\n", d->event_history[i]);
+            if (i == 0) offset += snprintf(screen + offset, screen_size - offset, "\033[1m-> %s\033[0m\n", d->event_history[i]);
+            else offset += snprintf(screen + offset, screen_size - offset, "   %s\n", d->event_history[i]);
         }
     }
-    offset += snprintf(screen + offset, sizeof(screen) - offset, "=====================================================\n");
+    offset += snprintf(screen + offset, screen_size - offset, "=====================================================\n");
 
     write(STDOUT_FILENO, screen, offset);
+    free(screen);
 }
 
 // Поиск свободного места

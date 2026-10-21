@@ -67,7 +67,7 @@ void cleanup_dispatcher(Dispatcher *d);
 bool is_queue_empty(const Queue *q);
 bool is_queue_full(const Queue *q);
 bool enqueue(Queue *q, Car car);
-bool dequeue(Queue *q, Car *car);\
+bool dequeue(Queue *q, Car *car);
 void record_event(Dispatcher *d, const char *format, ...);
 void draw_dashboard(const Dispatcher *d);
 int find_free_spot(const Dispatcher *d, CarType type);

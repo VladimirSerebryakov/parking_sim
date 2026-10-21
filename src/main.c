@@ -58,6 +58,19 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // проверка параметров: отрицательные значения и min > max недопустимы
+    bool bad_params = params.max_ticks < 0 || params.queue_capacity < 0 || params.max_wait_time < 0 ||
+                      params.arrival_min < 0 || params.arrival_min > params.arrival_max ||
+                      params.park_time_min < 0 || params.park_time_min > params.park_time_max;
+    for (int i = 0; i < 3; i++) {
+        if (params.spots_count[i] < 0 || params.cars_count[i] < 0) bad_params = true;
+    }
+    if (bad_params) {
+        const char err[] = "Ошибка: параметры не могут быть отрицательными, минимум диапазона не может превышать максимум\n";
+        write(STDERR_FILENO, err, sizeof(err) - 1);
+        return 1;
+    }
+
     Dispatcher dispatcher;
     init_dispatcher(&dispatcher, &params);
     memset(dispatcher.event_history, 0, sizeof(dispatcher.event_history));
@@ -106,7 +119,7 @@ int main(int argc, char *argv[]) {
             if (spot_idx != -1) {
                 dispatcher.spots[spot_idx].is_occupied = true;
                 dispatcher.spots[spot_idx].current_car = new_car;
-                dispatcher.spots[spot_idx].current_car.parking_time_left = new_car.parking_time;
+                dispatcher.spots[spot_idx].current_car.parking_time_left = new_car.parking_time + 1;
                 dispatcher.cars_served++;
 
                 record_event(&dispatcher, "-> Назначено место #%d. Время стоянки: %d тактов",
