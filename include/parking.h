@@ -1,76 +1,43 @@
 #ifndef PARKING_H
 #define PARKING_H
 
-#include <stdbool.h>
-#include <stddef.h>
+#include "common.h"
+#include "params.h"
+#include "queue.h"
+#include "logger.h"
+#include <pthread.h>
+#include <semaphore.h>
+#include <stdatomic.h>
 
-#define HISTORY_SIZE 3
-
-typedef enum {
-    TYPE_REGULAR = 0, // Обычный
-    TYPE_LARGE = 1, // Крупногабаритный
-    TYPE_SPECIAL = 2 // Специальный (на инвалидные места)
-} CarType;
-
+// Общее состояние парковки. Все поля, кроме stop, stop_signal и семафоров, читаются и меняются только под mx
 typedef struct {
-    int id;
-    CarType type; // Тип автомобиля
-    int parking_time;
-    int parking_time_left; // Сколько тактов осталось стоять (если припаркован)
-    int wait_time; // Сколько тактов уже ждет в очереди
-    int max_wait_time; // Допустимое время ожидания
-} Car;
+    pthread_mutex_t mx; // Единственный мьютекс, защищающий всё состояние
+    sem_t dispatcher_wake; // «Для диспетчера есть событие»: прибытие, освобождение места или остановка
+    sem_t sim_end; // «Пора завершаться»: все авто обработаны или получен сигнал (лимит времени - таймаут ожидания)
+    bool end_notified; // sim_end уже поднят из-за того, что все авто обработаны
+    ParkingSpot *spots; // Все места подряд: сначала обычные, затем крупные, затем спец.
+    int total_spots; // Общее число мест
+    Car *cars; // Все автомобили (массив выделяется заранее, живёт до конца программы)
+    int total_cars; // Сколько автомобилей будет сгенерировано всего
+    int cars_generated; // Сколько уже выехало на парковку (запущено потоков)
+    int cars_finished; // Сколько уже завершили работу (уехали, получили отказ или отмену)
+    bool generator_done; // Генератор выпустил всех, кого собирался
+    Queue inbox; // Прибывшие авто, ожидающие решения диспетчера (въезд)
+    Queue queue; // Очередь перед въездом (ограниченной вместимости)
+    SimParams params; // Параметры
+    int cars_served; // Обслужено
+    int cars_left_queue; // Ушло из очереди по таймауту
+    int cars_rejected; // Отказано (очередь заполнена)
+    int cars_cancelled; // Ожидание прервано остановкой симуляции
+    Logger log; // Журнал событий
+    atomic_bool stop; // Пора останавливаться (Ctrl+C, лимит времени или все обработаны)
+    atomic_int stop_signal; // Сигнал, прервавший симуляцию (SIGINT/SIGTERM), 0 - не было
+} Parking;
 
-typedef struct {
-    int id;
-    CarType type; // Совместимый тип
-    bool is_occupied; // Занят ли
-    Car current_car; // Автомобиль, занимающий место
-} ParkingSpot;
-
-// Очередь
-typedef struct {
-    Car *buffer; // Массив авто
-    int capacity; // Вместимость
-    int size; // Кол-во машин
-    int head; // Индекс начала очереди
-    int tail; // Индекс конца очереди
-} Queue;
-
-// Параметры
-typedef struct {
-    int spots_count[3]; // Количество мест каждого типа
-    int cars_count[3];  // Количество машин каждого типа для генерации
-    int queue_capacity;  // Вместимость очереди
-    int arrival_min, arrival_max; // Диапазон интервалов прибытия
-    int park_time_min, park_time_max; // Диапазон времени стоянки
-    int max_wait_time; // Максимальное время в очереди
-    int max_ticks; // Предельное число тактов
-} SimParams;
-
-// Диспетчер
-typedef struct {
-    ParkingSpot *spots;
-    int total_spots;
-    Queue queue;
-    SimParams params;
-    int current_tick;
-    int cars_served;
-    int cars_left_queue;
-    int cars_rejected;
-    char event_history[HISTORY_SIZE][128]; // история событий
-    int log_fd;
-} Dispatcher;
-
-void init_dispatcher(Dispatcher *d, const SimParams *params);
-void cleanup_dispatcher(Dispatcher *d);
-bool is_queue_empty(const Queue *q);
-bool is_queue_full(const Queue *q);
-bool enqueue(Queue *q, Car car);
-bool dequeue(Queue *q, Car *car);\
-void record_event(Dispatcher *d, const char *format, ...);
-void draw_dashboard(const Dispatcher *d);
-int find_free_spot(const Dispatcher *d, CarType type);
-int get_rand_range(int min, int max);
+void init_parking(Parking *p, const SimParams *params);
+void cleanup_parking(Parking *p);
+// Записывает событие в журнал с текущим тактом (вызывать под mx)
+void record_event(Parking *p, const char *format, ...);
+int find_free_spot(const Parking *p, CarType type);
 
 #endif // PARKING_H
