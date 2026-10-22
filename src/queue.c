@@ -7,7 +7,7 @@ void queue_init(Queue *q, int capacity) {
     q->size = 0;
     q->head = 0;
     q->tail = 0;
-    q->buffer = (Car *)malloc(capacity * sizeof(Car));
+    q->buffer = (Car **)malloc(capacity * sizeof(Car *));
 }
 
 void queue_free(Queue *q) {
@@ -26,7 +26,7 @@ bool is_queue_full(const Queue *q) {
 }
 
 // Добавляем в очередь
-bool enqueue(Queue *q, Car car) {
+bool enqueue(Queue *q, Car *car) {
     if (is_queue_full(q)) {
         return false;
     }
@@ -38,7 +38,7 @@ bool enqueue(Queue *q, Car car) {
 }
 
 // Забираем из очереди
-bool dequeue(Queue *q, Car *car) {
+bool dequeue(Queue *q, Car **car) {
     if (is_queue_empty(q)) {
         return false;
     }
@@ -46,4 +46,17 @@ bool dequeue(Queue *q, Car *car) {
     q->head = (q->head + 1) % q->capacity;
     q->size--;
     return true;
+}
+
+Car *queue_get(const Queue *q, int i) {
+    return q->buffer[(q->head + i) % q->capacity];
+}
+
+void queue_remove_at(Queue *q, int i) {
+    // сдвигаем все машины после i-й на одну позицию к началу
+    for (int j = i; j < q->size - 1; j++) {
+        q->buffer[(q->head + j) % q->capacity] = q->buffer[(q->head + j + 1) % q->capacity];
+    }
+    q->tail = (q->tail - 1 + q->capacity) % q->capacity;
+    q->size--;
 }

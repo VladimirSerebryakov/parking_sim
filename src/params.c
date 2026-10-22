@@ -6,8 +6,8 @@
 #include <getopt.h>
 
 // Имена стратегий в аргументе -g и в выводе (индекс = значение Strategy)
-static const char *strategy_args[] = {"fifo", "lifo", "deadline", "short"};
-static const char *strategy_names[] = {"FIFO", "LIFO", "DEADLINE", "SHORT"};
+static const char *strategy_args[] = {"fifo", "lifo", "random", "short"};
+static const char *strategy_names[] = {"FIFO", "LIFO", "RANDOM", "SHORT"};
 
 const char *strategy_name(Strategy s) {
     return strategy_names[s];
@@ -61,7 +61,7 @@ int parse_params(int argc, char *argv[], SimParams *params) {
             case 'g': {
                 int s = parse_strategy(optarg);
                 if (s == -1) {
-                    const char err[] = "Ошибка: неизвестная стратегия (допустимо: fifo, lifo, deadline, short)\n";
+                    const char err[] = "Ошибка: неизвестная стратегия (допустимо: fifo, lifo, random, short)\n";
                     write(STDERR_FILENO, err, sizeof(err) - 1);
                     return -1;
                 }
@@ -69,7 +69,7 @@ int parse_params(int argc, char *argv[], SimParams *params) {
                 break;
             }
             default: {
-                const char usage[] = "Использование: ./parking_sim [-t макс_такты (0 - без ограничения)] [-q очередь] [-r об_места] [-l кр_места] [-s сп_места] [-w ожидание] [-a мин_прибытие] [-b макс_прибытие] [-p мин_стоянка] [-P макс_стоянка] [-c об_авто] [-C кр_авто] [-S сп_авто] [-d мс_на_такт] [-R seed] [-g fifo|lifo|deadline|short] [-L файл_журнала]\n";
+                const char usage[] = "Использование: ./parking_sim [-t макс_такты (0 - без ограничения)] [-q очередь] [-r об_места] [-l кр_места] [-s сп_места] [-w ожидание] [-a мин_прибытие] [-b макс_прибытие] [-p мин_стоянка] [-P макс_стоянка] [-c об_авто] [-C кр_авто] [-S сп_авто] [-d мс_на_такт] [-R seed] [-g fifo|lifo|random|short] [-L файл_журнала]\n";
                 write(STDERR_FILENO, usage, sizeof(usage) - 1);
                 return -1;
             }

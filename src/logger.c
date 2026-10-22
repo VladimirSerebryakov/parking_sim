@@ -26,7 +26,7 @@ void log_vevent(Logger *log, int tick, const char *format, va_list args) {
     vsnprintf(buffer, sizeof(buffer), format, args);
 
     if (log->fd != -1) {
-        char log_buffer[160];
+        char log_buffer[EVENT_LEN + 32]; // событие + префикс "[Такт N] " гарантированно помещаются
         int log_len = snprintf(log_buffer, sizeof(log_buffer), "[Такт %d] %s\n", tick, buffer);
         write(log->fd, log_buffer, log_len);
     }

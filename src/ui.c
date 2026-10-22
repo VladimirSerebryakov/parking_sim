@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "sim_clock.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -12,13 +13,14 @@ void ui_leave(void) {
     write(STDOUT_FILENO, "\033[?1049l", 8);
 }
 
-// Отрисовка
-void draw_dashboard(const Parking *p) {
+// Сборка кадра дашборда
+char *build_dashboard(const Parking *p, int *len) {
     // размер буфера зависит от числа мест и вместимости очереди, иначе при большом числе мест буфер переполняется
-    size_t screen_size = 1024 + p->total_spots * 128 + p->queue.capacity * 16 + HISTORY_SIZE * 160;
+    size_t screen_size = 1024 + p->total_spots * 128 + p->queue.capacity * 16 + HISTORY_SIZE * (EVENT_LEN + 16);
     char *screen = (char *)malloc(screen_size);
-    if (screen == NULL) return;
+    if (screen == NULL) return NULL;
     int offset = 0;
+    int now = now_ticks();
 
     // Очищаем экран полностью и ставим курсор в левый верхний угол
     offset += snprintf(screen + offset, screen_size - offset, "\033[2J\033[H");
@@ -31,16 +33,18 @@ void draw_dashboard(const Parking *p) {
         " \033[1;33m📊 СТАТИСТИКА:\033[0m Обслужено: \033[32m%d\033[0m | Ушло (таймаут): \033[31m%d\033[0m | Отказ: \033[31m%d\033[0m\n"
         "=====================================================\n"
         " \033[1;34m[P] СОСТОЯНИЕ ПАРКОВКИ:\033[0m\n",
-        p->current_tick, strategy_name(p->params.strategy), p->params.seed, p->params.tick_ms,
+        now, strategy_name(p->params.strategy), p->params.seed, p->params.tick_ms,
         p->cars_served, p->cars_left_queue, p->cars_rejected);
 
     const char *type_tags[] = {"ОБЫЧ", "КРУП", "СПЕЦ"};
     for (int i = 0; i < p->total_spots; i++) {
         if (p->spots[i].is_occupied) {
+            const Car *car = p->spots[i].current_car;
+            int time_left = car->leave_tick - now;
+            if (time_left < 0) time_left = 0;
             offset += snprintf(screen + offset, screen_size - offset,
                 " [%s %d] \033[31m[  ЗАНЯТО  ]\033[0m Авто #%02d (Осталось: %2d т.)\n",
-                type_tags[p->spots[i].type], p->spots[i].id,
-                p->spots[i].current_car.id, p->spots[i].current_car.parking_time_left);
+                type_tags[p->spots[i].type], p->spots[i].id, car->id, time_left);
         } else {
             offset += snprintf(screen + offset, screen_size - offset,
                 " [%s %d] \033[32m[ СВОБОДНО ]\033[0m\n",
@@ -52,8 +56,7 @@ void draw_dashboard(const Parking *p) {
         "\n \033[1;35m🚗 ОЧЕРЕДЬ (%d/%d):\033[0m ", p->queue.size, p->queue.capacity);
     for (int i = 0; i < p->queue.capacity; i++) {
         if (i < p->queue.size) {
-            int idx = (p->queue.head + i) % p->queue.capacity;
-            offset += snprintf(screen + offset, screen_size - offset, "[ #%02d ] ", p->queue.buffer[idx].id);
+            offset += snprintf(screen + offset, screen_size - offset, "[ #%02d ] ", queue_get(&p->queue, i)->id);
         } else {
             offset += snprintf(screen + offset, screen_size - offset, "[    ] ");
         }
@@ -70,7 +73,16 @@ void draw_dashboard(const Parking *p) {
     }
     offset += snprintf(screen + offset, screen_size - offset, "=====================================================\n");
 
-    write(STDOUT_FILENO, screen, offset);
+    *len = offset;
+    return screen;
+}
+
+// Отрисовка
+void draw_dashboard(const Parking *p) {
+    int len;
+    char *screen = build_dashboard(p, &len);
+    if (screen == NULL) return;
+    write(STDOUT_FILENO, screen, len);
     free(screen);
 }
 
@@ -87,12 +99,14 @@ static int format_final_stats(char *buf, size_t size, const Parking *p, const ch
         " - Обслужено автомобилей: %s%d%s\n"
         " - Ушло по таймауту из очереди: %s%d%s\n"
         " - Отказано (очередь заполнена): %s%d%s\n"
+        " - Ожидание прервано остановкой: %d\n"
         " - Стратегия: %s, seed: %u (повтор: -R %u)\n"
         "========================================\n",
         exit_reason,
         green, p->cars_served, reset,
         red, p->cars_left_queue, reset,
         red, p->cars_rejected, reset,
+        p->cars_cancelled,
         strategy_name(p->params.strategy), p->params.seed, p->params.seed);
 }
 
