@@ -1,18 +1,45 @@
 #!/usr/bin/env bash
 # Прогон тестовых наборов из cases.txt и тестов сигналов (SIGINT, SIGTERM).
-# Запуск из любой директории:  tests/run_tests.sh [путь_к_parking_sim]
-# По умолчанию берётся build/parking_sim. Журналы прогонов сохраняются в tests/logs/.
+# Запуск: part3/tests/run_tests.sh [all|fork_unnamed|fork_named|independent_shm|independent_mq|бинарник]
+# По умолчанию проверяются все реализованные варианты.
 # Код выхода: 0 - все тесты пройдены, 1 - есть проваленные, 2 - не найден исполняемый файл.
 
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
-BIN="${1:-$DIR/../build/parking_sim}"
-LOGS="$DIR/logs"
+selection="${1:-all}"
+if [ "$selection" = all ]; then
+    result=0
+    for variant in fork_unnamed fork_named independent_shm independent_mq; do
+        if [ -n "${PARKING_TEST_LOGS:-}" ]; then
+            PARKING_TEST_LOGS="$PARKING_TEST_LOGS/$variant" "$DIR/run_tests.sh" "$variant" || result=1
+        else
+            "$DIR/run_tests.sh" "$variant" || result=1
+        fi
+    done
+    exit "$result"
+fi
+case "$selection" in
+    fork_unnamed|fork_named|independent_shm|independent_mq)
+        VARIANT="$selection"
+        BIN="$DIR/../../build/bin/$VARIANT/parking_$VARIANT"
+        ;;
+    *)
+        BIN="$selection"
+        case "$(basename "$BIN")" in
+            parking_fork_unnamed) VARIANT=fork_unnamed ;;
+            parking_fork_named) VARIANT=fork_named ;;
+            parking_independent_shm) VARIANT=independent_shm ;;
+            parking_independent_mq) VARIANT=independent_mq ;;
+            *) echo "Неизвестный вариант бинарника: $BIN"; exit 2 ;;
+        esac
+        ;;
+esac
+LOGS="${PARKING_TEST_LOGS:-$DIR/logs/$VARIANT}"
 TIMEOUT=120 # секунд на один прогон: дольше - считаем, что программа зависла
 
 if [ ! -x "$BIN" ]; then
     echo "Не найден исполняемый файл: $BIN"
-    echo "Соберите проект: mkdir -p build && cd build && cmake .. && make"
+    echo "Соберите проект из корня: cmake -S . -B build && cmake --build build"
     exit 2
 fi
 mkdir -p "$LOGS"
@@ -26,7 +53,7 @@ n=0
 # $3 - журнал, $4 - stderr. Печатает пояснение, возвращает 0 при успехе
 check_run() {
     local expect=$1 code=$2 log=$3 err=$4 reason
-    if grep -qE "WARNING: ThreadSanitizer|ERROR: AddressSanitizer|ERROR: LeakSanitizer|runtime error:" "$err"; then
+    if grep -qE "ThreadSanitizer|AddressSanitizer|LeakSanitizer|UndefinedBehaviorSanitizer|runtime error:" "$err"; then
         echo "сообщение санитайзера (см. $err)"
         return 1
     fi
@@ -71,7 +98,7 @@ report() {
 }
 
 echo "Исполняемый файл: $BIN"
-echo "Наборы параметров (tests/cases.txt):"
+echo "Наборы параметров (part3/tests/cases.txt):"
 while IFS='|' read -r expect name args; do
     expect="${expect//[[:space:]]/}"
     [ -z "$expect" ] || [ "${expect:0:1}" = "#" ] && continue
@@ -81,7 +108,7 @@ while IFS='|' read -r expect name args; do
     err="$LOGS/$(printf %02d $n).err"
 
     # $args без кавычек намеренно: строка разбивается на отдельные аргументы
-    timeout $TIMEOUT "$BIN" -d 1 -t 0 -L "$log" $args > /dev/null 2> "$err" < /dev/null
+    timeout $TIMEOUT "$BIN" -d 1 -t 0 -R 7 -L "$log" $args > /dev/null 2> "$err" < /dev/null
     code=$?
     msg=$(check_run "$expect" $code "$log" "$err")
     report $n "$name" $? "$msg"
@@ -121,4 +148,9 @@ signal_test TERM
 
 echo
 echo "Итого: пройдено $passed, провалено $failed"
-[ $failed -eq 0 ]
+[ $failed -eq 0 ] || exit 1
+if [ "$VARIANT" = independent_shm ] || [ "$VARIANT" = independent_mq ]; then
+    python3 "$DIR/check_independent.py" "$BIN"
+else
+    python3 "$DIR/check_processes.py" "$BIN" "$VARIANT"
+fi

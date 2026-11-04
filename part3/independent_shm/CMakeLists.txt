@@ -1,0 +1,16 @@
+# Независимые программы: POSIX-разделяемая память и именованные семафоры.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/independent_shm")
+add_library(parking_session STATIC src/session.c)
+target_include_directories(parking_session PUBLIC include)
+find_package(Threads REQUIRED)
+target_link_libraries(parking_session PUBLIC parking_common Threads::Threads rt)
+
+add_executable(parking_dispatcher src/dispatcher.c)
+add_executable(parking_car src/car.c)
+add_executable(parking_arrivals src/arrivals.c)
+add_executable(parking_independent_shm ../common/src/launcher.c)
+foreach(program parking_dispatcher parking_car parking_arrivals parking_independent_shm)
+    target_link_libraries(${program} PRIVATE parking_session)
+endforeach()
+add_dependencies(parking_arrivals parking_car)
+add_dependencies(parking_independent_shm parking_dispatcher parking_arrivals)
