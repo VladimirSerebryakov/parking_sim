@@ -1,0 +1,20 @@
+# Независимые программы: POSIX-очереди сообщений и именованные семафоры.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/independent_mq")
+find_package(Threads REQUIRED)
+add_library(parking_mq_protocol STATIC src/protocol.c)
+target_include_directories(parking_mq_protocol PUBLIC include)
+target_link_libraries(parking_mq_protocol PUBLIC parking_common Threads::Threads rt)
+
+# Имена целей глобально уникальны, имена файлов одинаковы внутри каталогов вариантов.
+add_executable(parking_mq_dispatcher src/server.c)
+add_executable(parking_mq_car src/car.c)
+add_executable(parking_mq_arrivals src/arrivals.c)
+add_executable(parking_independent_mq ../common/src/launcher.c)
+set_target_properties(parking_mq_dispatcher PROPERTIES OUTPUT_NAME parking_dispatcher)
+set_target_properties(parking_mq_car PROPERTIES OUTPUT_NAME parking_car)
+set_target_properties(parking_mq_arrivals PROPERTIES OUTPUT_NAME parking_arrivals)
+foreach(program parking_mq_dispatcher parking_mq_car parking_mq_arrivals parking_independent_mq)
+    target_link_libraries(${program} PRIVATE parking_mq_protocol)
+endforeach()
+add_dependencies(parking_mq_arrivals parking_mq_car)
+add_dependencies(parking_independent_mq parking_mq_dispatcher parking_mq_arrivals)
