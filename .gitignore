@@ -7,3 +7,6 @@ AGENTS.md
 part2/tests/logs/
 part3/tests/logs/
 parking_named_result.txt
+parking_tcp_result.txt
+part4/logs/
+__pycache__/

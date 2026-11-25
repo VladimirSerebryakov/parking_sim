@@ -1,0 +1,8 @@
+.git
+build*
+**/logs
+**/__pycache__
+*.txt
+!CMakeLists.txt
+!**/CMakeLists.txt
+report_images

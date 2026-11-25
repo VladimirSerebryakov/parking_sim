@@ -1,0 +1,25 @@
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: part4/Dockerfile
+    image: parking-tcp:local
+    command: [parking_server, 0.0.0.0, "5050", -d, "100", -t, "0", -a, "5", -b, "5", -R, "7", -L, /results/parking_result.txt]
+    ports:
+      - "${PARKING_PORT:-5050}:5050"
+    volumes:
+      - ./logs:/results
+    stop_grace_period: 10s
+  arrivals:
+    image: parking-tcp:local
+    command: [parking_arrivals, server, "5050"]
+    depends_on:
+      - server
+    stop_grace_period: 10s
+  monitor:
+    image: parking-tcp:local
+    command: [parking_monitor, server, "5050", --plain]
+    depends_on:
+      - server
+    profiles: [observe]
+    stop_grace_period: 10s

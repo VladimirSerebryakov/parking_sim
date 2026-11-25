@@ -14,3 +14,4 @@ endif()
 
 add_subdirectory(part2)
 add_subdirectory(part3)
+add_subdirectory(part4)
